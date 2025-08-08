@@ -1,0 +1,20 @@
+class ResNetMultiChannel(nn.Module):
+    def __init__(self, n_channels=16, embedding_dim=256):
+        super().__init__()
+        weights = ResNet50_Weights.IMAGENET1K_V2
+        resnet = resnet50(weights=weights)
+        resnet.conv1 = nn.Conv2d(n_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        with torch.no_grad():
+            if n_channels == 3:
+                resnet.conv1.weight.copy_(resnet50(weights=weights).conv1.weight)
+            else:
+                w = resnet50(weights=weights).conv1.weight
+                mean_weight = w.mean(dim=1, keepdim=True)
+                resnet.conv1.weight.copy_(mean_weight.repeat(1, n_channels, 1, 1))
+        self.resnet = resnet
+        self.project = nn.Linear(resnet.fc.in_features, embedding_dim)
+        self.resnet.fc = nn.Identity()
+
+    def forward(self, x):
+        feats = self.resnet(x)
+        return self.project(feats)
